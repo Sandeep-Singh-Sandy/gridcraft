@@ -56,10 +56,6 @@ use tables::filter_table_range;
 pub use tables::{TableHeading, filter_button_rect, heading_table, table_headings};
 
 pub const COL_HEADER_H: f32 = 21.0;
-/// Sheet units are 96-dpi pixels (as in XLSX); on screen one unit is drawn at this many points,
-/// which matches desktop spreadsheet density (a default 20 px row is 16 pt tall).
-pub const DISPLAY_SCALE: f32 = 0.8;
-
 /// The zoom percentages a Ctrl+wheel notch steps between: four per doubling (about 20% apart),
 /// so 25, 50, 100, 200 and 400 are on it. Excel steps 15 points a notch instead; the status bar's
 /// Zoom In / Zoom Out buttons keep their 10% steps.
@@ -357,7 +353,7 @@ impl WheelZoom {
 /// Row and column heading labels grow with the zoom as the cells do, as in Excel (at 400% the
 /// labels are four times their 100% size), and never get smaller than a readable 8.5 points.
 pub(crate) fn heading_font_size(zoom: f32) -> f32 {
-    (11.5 * (zoom / DISPLAY_SCALE)).max(8.5)
+    (14.5 * zoom).max(8.5)
 }
 
 #[cfg(test)]

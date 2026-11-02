@@ -8,9 +8,8 @@ use super::quadrant::{QuadrantPaint, mirror_painted, paint_quadrant};
 use super::selection::{SelectionPaintInput, paint_selection};
 use super::tables::{TableHeading, paint_filter_button, table_headings};
 use super::{
-    Align2, Arc, CfCache, Color32, DISPLAY_SCALE, Drag, MAX_COLS, MAX_ROWS, Painter, PaneQuad, RangeRef, Rect, Sense, Sheet, SheetApp, Stroke,
-    StrokeKind, Tokens, WHEEL_ZOOM_IDLE, WheelZoom, Workbook, col_to_letters, heading_font_size, json, pos2, theme, vec2, wheel_zoom_step,
-    zoom_glide_step,
+    Align2, Arc, CfCache, Color32, Drag, MAX_COLS, MAX_ROWS, Painter, PaneQuad, RangeRef, Rect, Sense, Sheet, SheetApp, Stroke, StrokeKind, Tokens,
+    WHEEL_ZOOM_IDLE, WheelZoom, Workbook, col_to_letters, heading_font_size, json, pos2, theme, vec2, wheel_zoom_step, zoom_glide_step,
 };
 #[cfg(test)]
 use super::{CellRef, Pos2};
@@ -115,7 +114,7 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
             }
             app.grid.wheel_zoom = Some(zooming);
         } else if scroll_delta != egui::Vec2::ZERO {
-            let z = if paper { make_geo(app, view.scroll).z } else { sh.zoom as f32 / 100.0 * DISPLAY_SCALE };
+            let z = if paper { make_geo(app, view.scroll).z } else { sh.zoom as f32 / 100.0 };
             let mut d = scroll_delta;
             // A horizontal swipe moves the content the way the fingers go, which is towards
             // higher columns on a mirrored sheet.
@@ -134,7 +133,7 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
         app.grid.touch_pan = true;
     }
     if app.grid.touch_pan && resp.dragged() && ui.input(|i| i.multi_touch().is_none()) {
-        let z = if paper { make_geo(app, view.scroll).z } else { sh.zoom as f32 / 100.0 * DISPLAY_SCALE };
+        let z = if paper { make_geo(app, view.scroll).z } else { sh.zoom as f32 / 100.0 };
         let mut d = resp.drag_delta();
         if sh.right_to_left {
             d.x = -d.x;
@@ -633,7 +632,7 @@ pub(crate) fn paint_headers(
                         // The name is cut off at the button, as a cell's text is at its neighbour.
                         let end = h.button.map_or(cr.right(), |b| b.left()) - 2.0;
                         let room = Rect::from_min_max(cr.min, pos2(end.max(cr.left()), cr.bottom())).intersect(pc.clip_rect());
-                        let pad = 4.0 * (geo.z / DISPLAY_SCALE).max(0.75);
+                        let pad = 5.0 * geo.z.max(0.75);
                         pc.with_clip_rect(room).text(pos2(cr.left() + pad, cr.center().y), Align2::LEFT_CENTER, &h.name, font.clone(), color);
                         if let Some(b) = h.button {
                             paint_filter_button(&pc, b, h.filtered);
