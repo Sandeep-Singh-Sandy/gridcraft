@@ -16,6 +16,7 @@ use gridcraft_model::{
     Anchor, BorderLine, BorderStyle, Borders, Color, HAlign, Orientation, PageOrder, PatternType, PrintSettings, ShapeKind, Sheet, Style, StyleId,
     StyleTable, Underline, VAlign, Visibility, Workbook,
 };
+pub use gridcraft_pdf::{DrawOp, Family};
 use gridcraft_pdf::{Font, Page, PdfDoc, Point, Rect, Rgb};
 use serde_json::{Value as Json, json};
 
@@ -60,7 +61,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print…",
             ["File"],
             Some("Cmd+P"),
-            "{path?, sheets?: active|all, range?, fitToPage?: bool} → {pages, bytes, base64} — the PDF the UI hands to the system print dialog",
+            "{path?, sheets?: active|all, range?, fitToPage?: bool, pageFrom?, pageTo? (1-based, inclusive; page numbers keep counting from the whole printout)} → {pages, bytes, base64} — the PDF the UI hands to the system print dialog",
             has_doc,
             print
         ),
@@ -92,7 +93,46 @@ pub const MAX_PAGES: usize = 2000;
 
 /// Renders laid-out sheets to a PDF.
 pub fn render_pdf(wb: &Workbook, layouts: &[SheetLayout], file: &str, path: &str) -> (Vec<u8>, usize) {
+    render_pdf_pages(wb, layouts, file, path, None)
+}
+
+/// [`render_pdf`] limited to pages `first..=last` (1-based, counted over the whole job) when
+/// `pages` is given. Skipped pages still count, so `&P` and `&N` match the full printout.
+pub fn render_pdf_pages(wb: &Workbook, layouts: &[SheetLayout], file: &str, path: &str, pages: Option<(usize, usize)>) -> (Vec<u8>, usize) {
+    let doc = render_doc(wb, layouts, file, path, pages, false);
+    let n = doc.page_count();
+    (doc.finish(), n)
+}
+
+/// One printed page as the drawing operations that print it: what [`preview_page`] returns, for
+/// painting a preview that looks like the printout (fills, borders, fonts, colours, wrapping).
+#[derive(Clone, Debug)]
+pub struct PagePreview {
+    /// The page's size in points.
+    pub width: f32,
+    pub height: f32,
+    pub ops: Vec<DrawOp>,
+}
+
+/// Page `page` (1-based, counted over the whole printout like the page numbers in headers and
+/// footers) of the printout `opts` selects, drawn by the same code that writes the PDF.
+/// `file` and `path` are the workbook's title and path for the `&F` and `&Z` header codes.
+/// `None` when the printout has no such page.
+pub fn preview_page(wb: &Workbook, opts: &PrintOptions, file: &str, path: &str, page: usize) -> Option<PagePreview> {
+    if page == 0 {
+        return None;
+    }
+    let lays = layouts(wb, opts);
+    let doc = render_doc(wb, &lays, file, path, Some((page, page)), true);
+    let (width, height, ops) = doc.page_ops(0)?;
+    Some(PagePreview { width, height, ops: ops.to_vec() })
+}
+
+/// Draws the laid-out sheets (pages `pages` only, when given) into a document; `record` keeps each
+/// page's [`DrawOp`]s as well.
+fn render_doc(wb: &Workbook, layouts: &[SheetLayout], file: &str, path: &str, pages: Option<(usize, usize)>, record: bool) -> PdfDoc {
     let mut doc = PdfDoc::new();
+    doc.set_recording(record);
     doc.info.title = if wb.props.title.is_empty() { file.to_string() } else { wb.props.title.clone() };
     doc.info.author = wb.props.author.clone();
     let total: usize = layouts.iter().map(|l| l.pages.len()).sum();
@@ -110,6 +150,11 @@ pub fn render_pdf(wb: &Workbook, layouts: &[SheetLayout], file: &str, path: &str
         let (aw, ah) = lay.avail();
         for (pi, (ri, ci)) in lay.pages.iter().enumerate() {
             page_no += 1;
+            if let Some((first, last)) = pages
+                && (page_no < first || page_no > last)
+            {
+                continue;
+            }
             let (Some(rband), Some(cband)) = (lay.row_bands.get(*ri).copied(), lay.col_bands.get(*ci).copied()) else { continue };
             let rsegs = segments(lay.title_rows, rband);
             let csegs = segments(lay.title_cols, cband);
@@ -166,8 +211,7 @@ pub fn render_pdf(wb: &Workbook, layouts: &[SheetLayout], file: &str, path: &str
             page.link_page(Rect::new(lx, ly, w, h), target_page, Point::new(x, y));
         }
     }
-    let n = doc.page_count();
-    (doc.finish(), n)
+    doc
 }
 
 // ---------------------------------------------------------------- commands
@@ -177,7 +221,11 @@ fn build_pdf(s: &Session, p: &Json, cmd: &str) -> Result<(Vec<u8>, usize)> {
     let d = s.doc()?;
     let lays = layouts(&d.wb, &opts);
     let path = d.path.clone().unwrap_or_default();
-    Ok(render_pdf(&d.wb, &lays, &d.display_title(), &path))
+    let (bytes, n) = render_pdf_pages(&d.wb, &lays, &d.display_title(), &path, opts.pages);
+    if opts.pages.is_some() && n == 0 {
+        return Err(bad(cmd, "the page range selects no pages of this printout"));
+    }
+    Ok((bytes, n))
 }
 
 pub(crate) fn export_pdf(s: &mut Session, p: &Json) -> Result<Json> {
