@@ -74,19 +74,24 @@ fn copy_merges(
 
 pub(super) fn paste_special(s: &mut Session, p: &Json) -> Result<Json> {
     let Some(clip) = s.clipboard.clone() else { return Err(EngineError::Other("Nothing to paste.".into())) };
-    let what = match str_param(p, "what").unwrap_or("all") {
-        "all" => What::All,
-        "formulas" => What::Formulas,
-        "values" => What::Values,
-        "formats" => What::Formats,
-        "comments" | "notes" => What::Comments,
-        "validation" => What::Validation,
-        "allExceptBorders" => What::AllExceptBorders,
-        "columnWidths" => What::ColumnWidths,
-        "formulasAndNumberFormats" => What::FormulasAndNumberFormats,
-        "valuesAndNumberFormats" => What::ValuesAndNumberFormats,
+    // Excel's "using source theme" and "source formatting" modes are an `All` and a `Values` paste
+    // that also bring the source's look along.
+    let (what, source_theme, source_formats) = match str_param(p, "what").unwrap_or("all") {
+        "all" => (What::All, false, false),
+        "allUsingSourceTheme" => (What::All, true, false),
+        "formulas" => (What::Formulas, false, false),
+        "values" => (What::Values, false, false),
+        "valuesAndSourceFormatting" => (What::Values, false, true),
+        "formats" => (What::Formats, false, false),
+        "comments" | "notes" => (What::Comments, false, false),
+        "validation" => (What::Validation, false, false),
+        "allExceptBorders" => (What::AllExceptBorders, false, false),
+        "columnWidths" => (What::ColumnWidths, false, false),
+        "formulasAndNumberFormats" => (What::FormulasAndNumberFormats, false, false),
+        "valuesAndNumberFormats" => (What::ValuesAndNumberFormats, false, false),
         other => return Err(bad("edit.pasteSpecial", format!("unknown `what`: {other}"))),
     };
+    let keep_widths = bool_param(p, "keepColumnWidths").unwrap_or(false);
     let op = str_param(p, "operation").unwrap_or("none").to_string();
     let skip_blanks = bool_param(p, "skipBlanks").unwrap_or(false);
     let transpose = bool_param(p, "transpose").unwrap_or(false);
@@ -124,7 +129,10 @@ pub(super) fn paste_special(s: &mut Session, p: &Json) -> Result<Json> {
             if same_doc {
                 return id;
             }
-            *style_map.entry(id).or_insert_with(|| wb.styles.intern(src_wb.styles.get(id).clone()))
+            *style_map.entry(id).or_insert_with(|| {
+                let style = src_wb.styles.get(id);
+                wb.styles.intern(if source_theme { style.with_theme_resolved(&src_wb.theme) } else { style.clone() })
+            })
         };
         let mut moved_formulas = Vec::new();
         let mut moved_pictures = std::collections::BTreeMap::new();
@@ -255,7 +263,9 @@ pub(super) fn paste_special(s: &mut Session, p: &Json) -> Result<Json> {
                         new.formula = None;
                         new.py = None;
                         new.value = src_val.clone();
-                        if what == What::ValuesAndNumberFormats {
+                        if source_formats {
+                            new.style = map_style(sc_cell.style, &mut cx.wb);
+                        } else if what == What::ValuesAndNumberFormats {
                             let nf = src_wb.styles.get(sc_cell.style).num_fmt.clone();
                             new.style = cx.wb.styles.derive(old.style, |s| s.num_fmt = nf);
                         }
@@ -317,6 +327,14 @@ pub(super) fn paste_special(s: &mut Session, p: &Json) -> Result<Json> {
                 cx.sheet_mut(dest_sheet)?.cell_pictures.insert(dest, picture);
             }
             cx.touch(dest_sheet, dest);
+        }
+        if keep_widths && !transpose && what != What::ColumnWidths {
+            for c in 0..src.width() {
+                let (Some(from), Some(to)) = (src.start.col.checked_add(c), at.col.checked_add(c)) else { break };
+                if let Some(info) = src_sheet.cols.get(&from).copied() {
+                    cx.sheet_mut(dest_sheet)?.cols.insert(to, info);
+                }
+            }
         }
         // Merged areas inside the copied block travel with it.
         copy_merges(cx, dest_sheet, src_sheet, src, at, what, transpose)?;

@@ -475,6 +475,7 @@ impl Dialog {
                         label: "Paste",
                         options: vec![
                             ("all", "All"),
+                            ("allUsingSourceTheme", "All using Source theme"),
                             ("formulas", "Formulas (F)"),
                             ("values", "Values (V)"),
                             ("formats", "Formats (T)"),
