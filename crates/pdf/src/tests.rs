@@ -350,3 +350,50 @@ fn symbol_font_draws_maths_in_its_own_encoding() {
     assert!(Font::TimesRoman.can_encode('x') && !Font::TimesRoman.can_encode('\u{2211}'));
     assert_eq!(text_width(Font::Symbol, 10.0, "\u{2211}"), 7.13);
 }
+
+#[test]
+fn recording_keeps_the_drawing_operations_of_each_page() {
+    let mut doc = PdfDoc::new();
+    doc.set_recording(true);
+    let pg = doc.add_page(200.0, 100.0);
+    pg.save();
+    pg.clip_rect(0.0, 0.0, 50.0, 50.0);
+    pg.fill_rect(1.0, 2.0, 3.0, 4.0, [255, 0, 0]);
+    pg.text(5.0, 6.0, 10.0, Font::HelveticaBold, [0, 0, 0], "Hi");
+    pg.stroke_line(0.0, 0.0, 10.0, 0.0, 0.5, [0, 0, 0]);
+    pg.restore();
+    // A restore without a matching save is ignored, in the PDF and in the record.
+    pg.restore();
+    let (w, h, ops) = doc.page_ops(0).unwrap();
+    assert_eq!((w, h), (200.0, 100.0));
+    assert_eq!(ops.len(), 6, "{ops:?}");
+    assert_eq!(ops[0], DrawOp::Save);
+    assert_eq!(ops[1], DrawOp::Clip { x: 0.0, y: 0.0, w: 50.0, h: 50.0 });
+    assert_eq!(ops[2], DrawOp::FillRect { x: 1.0, y: 2.0, w: 3.0, h: 4.0, color: [255, 0, 0] });
+    match &ops[3] {
+        DrawOp::Text { text, font, width, size, .. } => {
+            assert_eq!(text, "Hi");
+            assert_eq!(*font, Font::HelveticaBold);
+            assert_eq!(*size, 10.0);
+            assert_eq!(*width, text_width(Font::HelveticaBold, 10.0, "Hi"));
+        }
+        other => panic!("expected the text, got {other:?}"),
+    }
+    assert!(matches!(&ops[4], DrawOp::Line { pts, .. } if pts.len() == 2));
+    assert_eq!(ops[5], DrawOp::Restore);
+}
+
+#[test]
+fn a_document_that_is_not_recording_keeps_no_operations() {
+    let mut doc = PdfDoc::new();
+    doc.add_page(100.0, 100.0).fill_rect(0.0, 0.0, 10.0, 10.0, [0, 0, 0]);
+    assert!(doc.page_ops(0).unwrap().2.is_empty());
+    assert!(doc.page_ops(1).is_none());
+}
+
+#[test]
+fn font_faces_report_their_family_weight_and_slant() {
+    for font in Font::ALL {
+        assert_eq!(font, Font::styled(font.family(), font.is_bold(), font.is_italic()), "{font:?}");
+    }
+}

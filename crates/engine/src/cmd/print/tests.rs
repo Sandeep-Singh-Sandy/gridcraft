@@ -830,6 +830,59 @@ fn checkbox_cells_print_as_boxes_not_true_false() {
 }
 
 #[test]
+fn print_page_range_limits_the_pages_it_outputs() {
+    let mut s = s();
+    // Rows 1, 60 and 130 land on three different pages at the default Letter, 100% setup.
+    s.execute("cell.set", json!({"cell": "A1", "input": "first"})).unwrap();
+    s.execute("cell.set", json!({"cell": "A60", "input": "second"})).unwrap();
+    s.execute("cell.set", json!({"cell": "A130", "input": "third"})).unwrap();
+    let (_, all) = pdf_of(&mut s, json!({}));
+    assert_eq!(all, 3);
+    let (_, middle) = pdf_of(&mut s, json!({"pageFrom": 2, "pageTo": 2}));
+    assert_eq!(middle, 1);
+    let (_, tail) = pdf_of(&mut s, json!({"pageFrom": 2}));
+    assert_eq!(tail, 2);
+    let (_, head) = pdf_of(&mut s, json!({"pageTo": 1}));
+    assert_eq!(head, 1);
+    // A reversed range or one past the last page is an error, not an empty file.
+    assert!(s.execute("file.exportPdf", json!({"pageFrom": 3, "pageTo": 2})).is_err());
+    assert!(s.execute("file.exportPdf", json!({"pageFrom": 9})).is_err());
+    // The print command honours it too.
+    let printed = s.execute("file.print", json!({"pageFrom": 3, "pageTo": 3})).unwrap();
+    assert_eq!(printed["pages"], 1);
+}
+
+#[test]
+fn preview_page_draws_the_formatting_the_printout_has() {
+    let mut s = s();
+    s.execute("range.setValues", json!({"range": "A1:B1", "values": [["Total", 12.5]]})).unwrap();
+    s.execute("home.bold", json!({"range": "A1"})).unwrap();
+    s.execute("home.fillColor", json!({"range": "A1", "color": "#FFFF00"})).unwrap();
+    s.execute("home.fontColor", json!({"range": "B1", "color": "#FF0000"})).unwrap();
+    let d = s.doc().unwrap();
+    let opts = PrintOptions::default();
+    let page = preview_page(&d.wb, &opts, "Book1", "", 1).unwrap();
+    assert!(page.width > 100.0 && page.height > 100.0);
+    assert!(page.ops.iter().any(|op| matches!(op, DrawOp::FillRect { color: [255, 255, 0], .. })), "the fill is drawn: {:?}", page.ops);
+    assert!(page.ops.iter().any(|op| matches!(op, DrawOp::Text { text, font: Font::HelveticaBold, .. } if text == "Total")), "bold text");
+    assert!(page.ops.iter().any(|op| matches!(op, DrawOp::Text { text, color: [255, 0, 0], .. } if text == "12.5")), "coloured text");
+    // The printout has one page: asking past it, or for page 0, gives nothing.
+    assert!(preview_page(&d.wb, &opts, "Book1", "", 2).is_none());
+    assert!(preview_page(&d.wb, &opts, "Book1", "", 0).is_none());
+}
+
+#[test]
+fn preview_page_matches_the_page_the_pdf_prints() {
+    let mut s = s();
+    s.execute("cell.set", json!({"cell": "A1", "input": "first"})).unwrap();
+    s.execute("cell.set", json!({"cell": "A60", "input": "second"})).unwrap();
+    let d = s.doc().unwrap();
+    let second = preview_page(&d.wb, &PrintOptions::default(), "Book1", "", 2).unwrap();
+    let texts: Vec<&str> = second.ops.iter().filter_map(|op| if let DrawOp::Text { text, .. } = op { Some(text.as_str()) } else { None }).collect();
+    assert_eq!(texts, ["second"], "page 2 holds only what the second printed page holds");
+}
+
+#[test]
 fn an_equation_without_a_layout_prints_its_source_one_line_per_line() {
     use super::objects::{MAX_FALLBACK_LINES, fallback_lines};
     let mut s = s();

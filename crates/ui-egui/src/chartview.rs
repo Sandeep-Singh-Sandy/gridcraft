@@ -149,7 +149,7 @@ pub fn paint_prims(p: &Painter, origin: Pos2, prims: &[Prim], z: f32) {
     }
 }
 
-fn is_convex(v: &[Pos2]) -> bool {
+pub(crate) fn is_convex(v: &[Pos2]) -> bool {
     let n = v.len();
     let mut sign = 0.0f32;
     for i in 0..n {
@@ -170,7 +170,7 @@ fn is_convex(v: &[Pos2]) -> bool {
 
 /// Area charts produce "mountain" polygons whose bottom edge is a straight baseline: fill them
 /// as vertical strips (exact for such shapes, acceptable for others).
-fn area_mesh(v: &[Pos2], col: Color32) -> egui::Mesh {
+pub(crate) fn area_mesh(v: &[Pos2], col: Color32) -> egui::Mesh {
     let mut mesh = egui::Mesh::default();
     let n = v.len();
     if n < 3 {
