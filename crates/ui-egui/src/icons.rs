@@ -186,6 +186,12 @@ pub enum Icon {
     RunTo,
     /// Stop: a square.
     StopSquare,
+    /// Print settings: a portrait page, a landscape page, a page printed on both sides, and a page
+    /// shrunk to fit.
+    Portrait,
+    Landscape,
+    Sides,
+    FitPage,
 }
 
 struct G<'a> {
@@ -911,6 +917,37 @@ fn paint_with(p: &Painter, rect: Rect, icon: Icon, c: Color32, pal: &Palette) {
             g.line(&[(13.0, 3.0), (13.0, 9.0)], c, 1.1);
         }
         Icon::StopSquare => g.rect(3.0, 3.0, 10.0, 10.0, Some(pal.recording), None),
+        Icon::Portrait => {
+            g.rect(4.0, 1.5, 8.0, 13.0, None, Some(c));
+            for y in [5.0, 7.5, 10.0] {
+                g.stroke(&[(6.0, y), (10.0, y)], light);
+            }
+        }
+        Icon::Landscape => {
+            g.rect(1.5, 4.0, 13.0, 8.0, None, Some(c));
+            for y in [6.8, 9.2] {
+                g.stroke(&[(3.5, y), (12.5, y)], light);
+            }
+        }
+        Icon::Sides => {
+            // Two pages, with an arrow turning the sheet over above them.
+            g.rect(1.5, 4.5, 6.0, 10.0, None, Some(c));
+            g.rect(8.5, 4.5, 6.0, 10.0, None, Some(blue));
+            for y in [7.5, 10.0] {
+                g.stroke(&[(3.0, y), (6.0, y)], light);
+                g.stroke(&[(10.0, y), (13.0, y)], light);
+            }
+            g.line(&[(4.5, 2.5), (10.5, 2.5)], blue, 1.2);
+            g.poly(&[(10.0, 0.9), (12.5, 2.5), (10.0, 4.1)], blue);
+        }
+        Icon::FitPage => {
+            // A page with an arrow pressing in from each side.
+            g.rect(4.5, 1.5, 7.0, 13.0, None, Some(c));
+            g.line(&[(0.8, 8.0), (3.4, 8.0)], blue, 1.2);
+            g.poly(&[(4.2, 8.0), (2.4, 6.4), (2.4, 9.6)], blue);
+            g.line(&[(15.2, 8.0), (12.6, 8.0)], blue, 1.2);
+            g.poly(&[(11.8, 8.0), (13.6, 6.4), (13.6, 9.6)], blue);
+        }
     }
 }
 

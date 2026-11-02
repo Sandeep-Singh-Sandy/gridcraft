@@ -118,12 +118,18 @@ pub struct Backstage {
     text_edit_focused: bool,
     /// Print: the whole workbook rather than the active sheet.
     pub print_all: bool,
-    /// Print: fit each sheet on one page.
-    pub fit_to_page: bool,
     /// Print: the previewed page (0-based).
     preview_page: usize,
-    /// Print: the preview for (document, revision, whole workbook, fit to page).
-    preview: Option<((u64, u64, bool, bool), Json)>,
+    /// Print: the preview for (document, revision, whole workbook).
+    preview: Option<((u64, u64, bool), Json)>,
+    /// Print: the previewed page drawn as the printout draws it, for (document, revision, whole
+    /// workbook, page); `None` inside when the page could not be drawn.
+    page_preview: Option<((u64, u64, bool, usize), Option<std::sync::Arc<gridcraft_engine::cmd::print::PagePreview>>)>,
+    /// Print: first and last page to print, as typed (empty means no limit on that side).
+    pages_from: String,
+    pages_to: String,
+    /// Print: preview zoom as a percentage of the paper's real size; 0 fits the page to the window.
+    preview_zoom: u16,
     /// Save As: the chosen file type (an extension from [`SAVE_TYPES`]).
     pub save_format: &'static str,
     /// Home and Open: when the recent workbooks were last changed.
@@ -142,9 +148,12 @@ impl Backstage {
             props: Default::default(),
             text_edit_focused: false,
             print_all: false,
-            fit_to_page: false,
             preview_page: 0,
             preview: None,
+            page_preview: None,
+            pages_from: String::new(),
+            pages_to: String::new(),
+            preview_zoom: 0,
             save_format: "xlsx",
             recent: RecentFiles::default(),
         }
@@ -215,9 +224,12 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
     egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.ribbon)).show(ui, |ui| {
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             egui::Frame::NONE.inner_margin(egui::Margin { left: 44, right: 32, top: 26, bottom: 32 }).show(ui, |ui| {
-                ui.set_max_width(CONTENT_W);
+                // Pages read like a document, except Print, whose preview uses the whole window.
+                if bs.page != Page::Print {
+                    ui.set_max_width(CONTENT_W);
+                }
                 ui.label(RichText::new(lang.tr(bs.page.label())).font(theme::ui_font(28.0)).color(t.text));
-                ui.add_space(18.0);
+                ui.add_space(if bs.page == Page::Print { 10.0 } else { 18.0 });
                 match bs.page {
                     Page::Home => home(app, ui, &mut bs, &mut out),
                     Page::New => new_page(app, ui, &mut out),

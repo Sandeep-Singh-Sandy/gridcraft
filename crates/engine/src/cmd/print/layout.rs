@@ -1,7 +1,7 @@
 use super::header_footer::HF_FIXED_SIDE_MARGIN;
 use super::{
     Anchor, CellRef, Json, MAX_COLS, MAX_PAGES, MAX_ROWS, Orientation, PX_TO_PT, PageOrder, PrintSettings, RangeRef, Result, Sheet, Visibility,
-    Workbook, bad, bool_param, split_sheet, str_param,
+    Workbook, bad, bool_param, split_sheet, str_param, u32_param,
 };
 
 /// Cells in a page block above which only stored cells are visited (not every grid position).
@@ -105,6 +105,9 @@ pub struct PrintOptions {
     pub all_sheets: bool,
     pub range: Option<RangeRef>,
     pub fit_to_page: Option<bool>,
+    /// First and last page (1-based, inclusive) of the whole print job to output; `None` prints
+    /// every page. Page numbers in headers and footers keep counting from the full job.
+    pub pages: Option<(usize, usize)>,
 }
 
 impl PrintOptions {
@@ -118,7 +121,18 @@ impl PrintOptions {
             Some(r) => Some(RangeRef::parse(split_sheet(r).1).ok_or_else(|| bad(cmd, format!("not a range: `{r}`")))?),
             None => None,
         };
-        Ok(PrintOptions { all_sheets, range, fit_to_page: bool_param(p, "fitToPage") })
+        let pages = match (u32_param(p, "pageFrom"), u32_param(p, "pageTo")) {
+            (None, None) => None,
+            (from, to) => {
+                let from = from.unwrap_or(1).max(1) as usize;
+                let to = to.map_or(usize::MAX, |t| t as usize);
+                if to < from {
+                    return Err(bad(cmd, "`pageTo` must not be before `pageFrom`"));
+                }
+                Some((from, to))
+            }
+        };
+        Ok(PrintOptions { all_sheets, range, fit_to_page: bool_param(p, "fitToPage"), pages })
     }
 }
 

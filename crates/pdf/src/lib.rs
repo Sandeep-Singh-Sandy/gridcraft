@@ -142,6 +142,34 @@ impl Font {
         }
     }
 
+    /// The family of this face.
+    pub fn family(self) -> Family {
+        match self {
+            Font::Helvetica | Font::HelveticaBold | Font::HelveticaOblique | Font::HelveticaBoldOblique | Font::Symbol => Family::Sans,
+            Font::TimesRoman | Font::TimesBold | Font::TimesItalic | Font::TimesBoldItalic => Family::Serif,
+            Font::Courier | Font::CourierBold | Font::CourierOblique | Font::CourierBoldOblique => Family::Mono,
+        }
+    }
+
+    pub fn is_bold(self) -> bool {
+        matches!(
+            self,
+            Font::HelveticaBold | Font::HelveticaBoldOblique | Font::TimesBold | Font::TimesBoldItalic | Font::CourierBold | Font::CourierBoldOblique
+        )
+    }
+
+    pub fn is_italic(self) -> bool {
+        matches!(
+            self,
+            Font::HelveticaOblique
+                | Font::HelveticaBoldOblique
+                | Font::TimesItalic
+                | Font::TimesBoldItalic
+                | Font::CourierOblique
+                | Font::CourierBoldOblique
+        )
+    }
+
     /// Picks a standard family for a font name: serif faces map to Times, monospaced ones to
     /// Courier, everything else to Helvetica.
     pub fn family_for(name: &str) -> Family {
@@ -371,6 +399,80 @@ struct LinkAnnotation {
     target: LinkTarget,
 }
 
+/// One drawing operation of a page, recorded while the page is drawn (see [`PdfDoc::set_recording`]).
+/// Coordinates are page points with the origin at the top left and y pointing down, as the drawing
+/// methods take them, so another renderer can paint a faithful preview of the printed page.
+#[derive(Clone, Debug, PartialEq)]
+pub enum DrawOp {
+    /// Saves the clip (pair with [`DrawOp::Restore`]).
+    Save,
+    /// Restores the clip saved by the matching [`DrawOp::Save`].
+    Restore,
+    /// Intersects the clip with a rectangle.
+    Clip {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    },
+    FillRect {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        color: Rgb,
+    },
+    StrokeRect {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        width: f32,
+        color: Rgb,
+    },
+    /// A line or open polyline; `dash` is `[on, off, …]` in points, empty for solid.
+    Line {
+        pts: Vec<[f32; 2]>,
+        width: f32,
+        color: Rgb,
+        dash: Vec<f32>,
+    },
+    Polygon {
+        pts: Vec<[f32; 2]>,
+        fill: Option<Rgb>,
+        stroke: Option<(Rgb, f32)>,
+    },
+    Circle {
+        cx: f32,
+        cy: f32,
+        r: f32,
+        fill: Option<Rgb>,
+        stroke: Option<(Rgb, f32)>,
+    },
+    /// Text with its baseline origin at `(x, y)`, rotated clockwise by `angle` radians; `width`
+    /// is its advance in the PDF font, so a preview can keep the printed layout.
+    Text {
+        x: f32,
+        y: f32,
+        size: f32,
+        font: Font,
+        color: Rgb,
+        text: String,
+        angle: f32,
+        width: f32,
+    },
+    /// A picture in the box `(x, y, w, h)`; its pixels are not recorded.
+    Image {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    },
+}
+
+/// Most operations one recorded page keeps (a preview of a hostile sheet stays bounded).
+const MAX_RECORDED_OPS: usize = 250_000;
+
 /// A page under construction. Obtain one with [`PdfDoc::add_page`].
 pub struct Page {
     width: f32,
@@ -380,6 +482,8 @@ pub struct Page {
     images: Vec<ImageData>,
     links: Vec<LinkAnnotation>,
     depth: u32,
+    /// The drawing operations so far, when the document records them.
+    ops: Option<Vec<DrawOp>>,
 }
 
 /// Most bytes of content per page before further drawing is dropped (keeps hostile inputs from
@@ -407,6 +511,15 @@ impl Page {
         if !self.full() {
             self.content.push_str(s);
             self.content.push('\n');
+        }
+    }
+
+    /// Keeps `op` for a preview when this page records (the operation is built only then).
+    fn rec(&mut self, op: impl FnOnce() -> DrawOp) {
+        if let Some(ops) = &mut self.ops
+            && ops.len() < MAX_RECORDED_OPS
+        {
+            ops.push(op());
         }
     }
 
@@ -451,18 +564,21 @@ impl Page {
     pub fn save(&mut self) {
         self.depth = self.depth.saturating_add(1);
         self.content.push_str("q\n");
+        self.rec(|| DrawOp::Save);
     }
     /// Restores the graphics state saved by [`Page::save`]; extra calls are ignored.
     pub fn restore(&mut self) {
         if self.depth > 0 {
             self.depth -= 1;
             self.content.push_str("Q\n");
+            self.rec(|| DrawOp::Restore);
         }
     }
     /// Intersects the clip with a rectangle (until the next [`Page::restore`]).
     pub fn clip_rect(&mut self, x: f32, y: f32, w: f32, h: f32) {
         let s = format!("{} {} {} {} re W n", n(x), n(self.y(y + h)), n(w.max(0.0)), n(h.max(0.0)));
         self.op(&s);
+        self.rec(|| DrawOp::Clip { x, y, w: w.max(0.0), h: h.max(0.0) });
     }
 
     pub fn fill_rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: Rgb) {
@@ -471,6 +587,7 @@ impl Page {
         }
         let s = format!("{}\n{} {} {} {} re f", rgb_op(color, false), n(x), n(self.y(y + h)), n(w), n(h));
         self.op(&s);
+        self.rec(|| DrawOp::FillRect { x, y, w, h, color });
     }
 
     pub fn rect_stroke(&mut self, x: f32, y: f32, w: f32, h: f32, width: f32, color: Rgb) {
@@ -479,6 +596,7 @@ impl Page {
         }
         let s = format!("{}\n{} w [] 0 d\n{} {} {} {} re S", rgb_op(color, true), n(stroke_width(width)), n(x), n(self.y(y + h)), n(w), n(h));
         self.op(&s);
+        self.rec(|| DrawOp::StrokeRect { x, y, w, h, width, color });
     }
 
     pub fn stroke_line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, width: f32, color: Rgb) {
@@ -501,6 +619,7 @@ impl Page {
             n(self.y(end.y))
         );
         self.op(&s);
+        self.rec(|| DrawOp::Line { pts: vec![[start.x, start.y], [end.x, end.y]], width, color, dash: dash.to_vec() });
     }
 
     /// An open polyline.
@@ -512,6 +631,7 @@ impl Page {
         self.path(&mut s, pts, false);
         s.push_str(" S");
         self.op(&s);
+        self.rec(|| DrawOp::Line { pts: pts.to_vec(), width, color, dash: dash.to_vec() });
     }
 
     fn path(&self, s: &mut String, pts: &[[f32; 2]], close: bool) {
@@ -543,6 +663,7 @@ impl Page {
             _ => " S",
         });
         self.op(&s);
+        self.rec(|| DrawOp::Polygon { pts: pts.to_vec(), fill, stroke });
     }
 
     /// A circle approximated by four cubic Béziers.
@@ -597,6 +718,7 @@ impl Page {
             _ => " S",
         });
         self.op(&s);
+        self.rec(|| DrawOp::Circle { cx, cy, r, fill, stroke });
     }
 
     /// Text with its baseline starting at `(x, y)`.
@@ -611,7 +733,18 @@ impl Page {
             return;
         }
         let fi = font.index();
-        let size = n(size.min(10_000.0));
+        let size_pt = size.min(10_000.0);
+        self.rec(|| DrawOp::Text {
+            x: origin.x,
+            y: origin.y,
+            size: size_pt,
+            font,
+            color,
+            text: text.to_owned(),
+            angle,
+            width: text_width(font, size_pt, text),
+        });
+        let size = n(size_pt);
         let (sn, cs) = if angle.is_finite() { angle.sin_cos() } else { (0.0, 1.0) };
         // Clockwise in y-down = counter-clockwise negated in PDF's y-up space.
         let mut s = format!("BT\n{}\n{} {} {} {} {} {} Tm\n", rgb_op(color, false), n(cs), n(-sn), n(sn), n(cs), n(origin.x), n(self.y(origin.y)));
@@ -664,6 +797,7 @@ impl Page {
         self.images.push(ImageData { width: pw, height: ph, rgb, alpha });
         let s = format!("q {} 0 0 {} {} {} cm /Im{} Do Q", n(w), n(h), n(x), n(self.y(y + h)), idx + 1);
         self.op(&s);
+        self.rec(|| DrawOp::Image { x, y, w, h });
     }
 }
 
@@ -680,6 +814,8 @@ pub struct Info {
 pub struct PdfDoc {
     pages: Vec<Page>,
     pub info: Info,
+    /// Pages added from now on record their [`DrawOp`]s.
+    record: bool,
 }
 
 /// PackBits-style run-length encoding (PDF `RunLengthDecode`).
@@ -747,9 +883,32 @@ impl PdfDoc {
     pub fn add_page(&mut self, width_pt: f32, height_pt: f32) -> &mut Page {
         let width = if width_pt.is_finite() { width_pt.clamp(3.0, 14_400.0) } else { 612.0 };
         let height = if height_pt.is_finite() { height_pt.clamp(3.0, 14_400.0) } else { 792.0 };
-        self.pages.push(Page { width, height, content: String::new(), fonts: [false; FONT_SLOTS], images: Vec::new(), links: Vec::new(), depth: 0 });
+        let ops = self.record.then(Vec::new);
+        self.pages.push(Page {
+            width,
+            height,
+            content: String::new(),
+            fonts: [false; FONT_SLOTS],
+            images: Vec::new(),
+            links: Vec::new(),
+            depth: 0,
+            ops,
+        });
         let i = self.pages.len() - 1;
         &mut self.pages[i]
+    }
+
+    /// Makes the pages added from now on keep the [`DrawOp`]s they are drawn with, for painting a
+    /// preview of the page with another renderer. Off by default: exports keep only the PDF.
+    pub fn set_recording(&mut self, on: bool) {
+        self.record = on;
+    }
+
+    /// The width, height and recorded operations of page `i`; the operations are empty when the
+    /// document was not recording.
+    pub fn page_ops(&self, i: usize) -> Option<(f32, f32, &[DrawOp])> {
+        let page = self.pages.get(i)?;
+        Some((page.width, page.height, page.ops.as_deref().unwrap_or(&[])))
     }
 
     pub fn page_count(&self) -> usize {

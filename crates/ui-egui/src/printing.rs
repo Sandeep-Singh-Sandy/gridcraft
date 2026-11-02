@@ -28,6 +28,16 @@ pub fn show(state: &mut State, ui: &mut egui::Ui, discover: &Discover, translate
     }
 }
 
+/// Starts printer discovery the first time the Print page is drawn (what [`show`] does for its
+/// own controls) and collects finished discovery and submission results. Pages that draw their
+/// own controls from `State`'s public fields call this once per frame.
+pub fn prepare(state: &mut State, ctx: &egui::Context, discover: &Discover) {
+    if !state.discovering() && state.printers.is_empty() && state.message.is_none() {
+        state.refresh(discover);
+    }
+    state.poll(ctx);
+}
+
 /// Read print settings/status, or validate an explicit update before changing anything.
 /// `refresh: true` starts discovery only; this command never submits a job or opens a dialog.
 pub fn settings(state: &mut State, params: &serde_json::Value, discover: Option<&Discover>) -> Result<serde_json::Value, String> {
