@@ -454,6 +454,30 @@ fn paste_special_operations_keep_text_errors_and_formulas() {
 }
 
 #[test]
+fn paste_special_source_formatting_and_column_widths_come_across() {
+    let mut s = Session::new();
+    s.new_workbook();
+    s.execute("range.setValues", json!({"range": "A1", "values": [[7]]})).unwrap();
+    s.execute("home.bold", json!({"range": "A1"})).unwrap();
+    s.execute("home.columnWidth", json!({"cols": "A:A", "width": 150})).unwrap();
+    s.execute("edit.copy", json!({"range": "A1"})).unwrap();
+    s.execute("edit.pasteSpecial", json!({"what": "values", "at": "C1"})).unwrap();
+    let bold = |s: &Session, a: &str| {
+        let d = s.doc().unwrap();
+        let sh = d.wb.sheet(0).unwrap();
+        d.wb.styles.get(sh.style_id(CellRef::parse(a).unwrap())).font.bold
+    };
+    assert!(!bold(&s, "C1"), "plain values leave the destination's look alone");
+    s.execute("edit.pasteSpecial", json!({"what": "valuesAndSourceFormatting", "at": "C2"})).unwrap();
+    assert!(bold(&s, "C2"));
+    let c1 = s.doc().unwrap().wb.sheet(0).unwrap().cols.get(&2).copied();
+    assert!(c1.is_none(), "widths only come across when asked for");
+    s.execute("edit.pasteSpecial", json!({"what": "all", "keepColumnWidths": true, "at": "C3"})).unwrap();
+    assert_eq!(s.doc().unwrap().wb.sheet(0).unwrap().cols.get(&2).copied(), s.doc().unwrap().wb.sheet(0).unwrap().cols.get(&0).copied());
+    assert!(s.execute("edit.pasteSpecial", json!({"what": "allUsingSourceTheme", "at": "C4"})).is_ok());
+}
+
+#[test]
 fn cut_paste_that_overflows_the_grid_moves_nothing() {
     // #997: the source was emptied first and the cells that fell off the grid were skipped.
     let mut s = Session::new();

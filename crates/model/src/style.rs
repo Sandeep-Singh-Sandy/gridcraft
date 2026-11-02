@@ -54,6 +54,29 @@ impl Color {
     }
 }
 
+impl Style {
+    /// The same style with every theme colour replaced by the RGB it shows under `theme`, so it
+    /// looks the same in a workbook whose theme differs.
+    pub fn with_theme_resolved(&self, theme: &Theme) -> Style {
+        let fix = |c: &mut Color| {
+            if let Color::Theme(..) = c
+                && let Some([r, g, b]) = c.resolve(theme)
+            {
+                *c = Color::rgb(r, g, b);
+            }
+        };
+        let mut s = self.clone();
+        fix(&mut s.font.color);
+        fix(&mut s.fill.fg);
+        fix(&mut s.fill.bg);
+        let b = &mut s.borders;
+        for line in [&mut b.left, &mut b.right, &mut b.top, &mut b.bottom, &mut b.diag_down, &mut b.diag_up] {
+            fix(&mut line.color);
+        }
+        s
+    }
+}
+
 /// Tint as in ECMA-376: lighten towards white (positive) or darken (negative) in HSL luminance.
 pub fn apply_tint(rgb: [u8; 3], tint: f64) -> [u8; 3] {
     if tint == 0.0 {
