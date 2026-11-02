@@ -12,7 +12,7 @@ The hardware Excel uses, per platform, against GridCraft. Part of
 | Pen and touch (Draw tab) | Pen pressure and tilt, eraser end, touch mode, Ink to Shape, ink replay | Pen, highlighter, eraser, Ink to Shape with mouse/pen input; **no pressure or tilt**, no touch mode | Pressure-sensitive strokes where winit reports force; touch-friendly ribbon spacing: 4–6 h |
 | Trackpad and mouse | Smooth scrolling, pinch zoom, horizontal scroll, Magic Mouse | Smooth scrolling and zoom via egui | Verify pinch zoom on each platform: 1–2 h |
 | Multiple windows and monitors | One window per workbook, New Window for the same workbook, per-monitor DPI | A native window per workbook window on the desktop, New Window for the same workbook; new windows cascade from the last one on its monitor; View › Arrange All tiles, stacks or cascades them over the main window's monitor (web: one window) | Arrange All across monitors; verify per-monitor DPI with windows on two monitors: 2–3 h |
-| High-DPI and display scaling | yes | yes (display scale matched to desktop density; View › Interface size 75–200 % on top, #230) | — |
+| High-DPI and display scaling | yes | yes (100 % zoom is Excel's 100 %; View › Interface size 75–200 % on top, #230) | — |
 | Accessibility hardware (screen readers, braille displays, switch control) | Narrator, JAWS, NVDA, VoiceOver | AccessKit enabled in eframe; grid cells and ribbon not yet exposed as an accessible tree | Counted under UI ([ui-parity.md](ui-parity.md)) |
 | Printers | System print with driver options | Desktop submits through craft-print with printer choice, copies, duplex and grayscale; web browser printing | Counted under print |
 

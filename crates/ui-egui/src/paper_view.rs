@@ -17,7 +17,7 @@ use gridcraft_engine::paper::{self, HfZone, PageGrid};
 use serde_json::json;
 
 use crate::SheetApp;
-use crate::grid::{self, DISPLAY_SCALE, Geo};
+use crate::grid::{self, Geo};
 use crate::icons::Icon;
 use crate::theme::{self, Tokens};
 
@@ -85,7 +85,7 @@ pub fn grid_for(app: &mut SheetApp, wb: &Workbook, si: usize, sh: &Sheet, view: 
         Some(g) => g,
         None => Arc::new(PageGrid::build(wb, si, 0, 0)?),
     };
-    let z = ((sh.zoom as f32 / 100.0).clamp(0.1, 4.0) * DISPLAY_SCALE * base.scale.clamp(0.1, 4.0)).max(0.001);
+    let z = ((sh.zoom as f32 / 100.0).clamp(0.1, 4.0) * base.scale.clamp(0.1, 4.0)).max(0.001);
     let (x1, y1) = (scroll.x as f64 + (view.x / z) as f64, scroll.y as f64 + (view.y / z) as f64);
     let (need_r, need_c) = paper::need_for(sh, x1, y1);
     let g = if base.covers(need_r, need_c) {
@@ -182,7 +182,7 @@ pub(crate) fn paint_pages(input: PagePaintInput<'_>, cf: &mut CfCache) -> Vec<gr
             if let Some(band) = active_row.and_then(|row| grid::active_row_band(geo, sh, row, rows, cols)) {
                 pc.rect_filled(band, 0.0, t.active_row);
             }
-            let size = (14.0 * geo.z / DISPLAY_SCALE).clamp(8.0, 22.0);
+            let size = (17.5 * geo.z).clamp(8.0, 22.0);
             pc.text(clip.center(), Align2::CENTER_CENTER, tr(app, "Click to add data"), theme::ui_font(size), Color32::from_gray(150));
         }
         // The selection outline may straddle the margin edge (as at A1 in Normal view).
