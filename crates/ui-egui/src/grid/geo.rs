@@ -1,4 +1,4 @@
-use super::{Arc, COL_HEADER_H, CellRef, DISPLAY_SCALE, LineIndex, MAX_COLS, MAX_ROWS, Pos2, RangeRef, Rect, Sheet, pos2};
+use super::{Arc, COL_HEADER_H, CellRef, LineIndex, MAX_COLS, MAX_ROWS, Pos2, RangeRef, Rect, Sheet, pos2};
 
 /// Geometry of the grid for one frame (handles zoom and frozen panes).
 #[derive(Clone)]
@@ -33,14 +33,13 @@ pub struct Geo {
 
 impl Geo {
     pub fn new(sh: &Sheet, rect: Rect, scroll: egui::Vec2) -> Geo {
-        let zoom = (sh.zoom as f32 / 100.0).clamp(0.1, 4.0);
-        let z = zoom * DISPLAY_SCALE;
-        let header_h = if sh.show_headings { (COL_HEADER_H * zoom.max(0.75)).round() } else { 0.0 };
+        let z = (sh.zoom as f32 / 100.0).clamp(0.1, 4.0);
+        let header_h = if sh.show_headings { (COL_HEADER_H * z.max(0.75)).round() } else { 0.0 };
         let ri = std::sync::Arc::new(LineIndex::new(&sh.rows, sh.default_row_height, MAX_ROWS));
         let ci = std::sync::Arc::new(LineIndex::new(&sh.cols, sh.default_col_width, MAX_COLS));
         let last_row = ri.at((scroll.y + rect.height() / z) as f64 + 200.0) + 1;
         let digits = (last_row as f32).log10().floor() as i32 + 1;
-        let header_w = if sh.show_headings { ((digits.max(2) as f32 * 7.0 + 14.0) * zoom.max(0.75)).round() } else { 0.0 };
+        let header_w = if sh.show_headings { ((digits.max(2) as f32 * 7.0 + 14.0) * z.max(0.75)).round() } else { 0.0 };
         let (fr, fc) = sh.freeze.unwrap_or((0, 0));
         let frozen_w = (ci.start(fc) as f32) * z;
         let frozen_h = (ri.start(fr) as f32) * z;
@@ -48,14 +47,14 @@ impl Geo {
         let col_outline = Arc::new(crate::outline::Axis::of(sh, false));
         // Show Outline Symbols off: no bands (the outline's hidden lines stay hidden).
         let symbols = sh.show_outline_symbols;
-        let mut band_w = if symbols { crate::outline::band(row_outline.levels, zoom) } else { 0.0 };
-        let mut band_h = if symbols { crate::outline::band(col_outline.levels, zoom) } else { 0.0 };
+        let mut band_w = if symbols { crate::outline::band(row_outline.levels, z) } else { 0.0 };
+        let mut band_h = if symbols { crate::outline::band(col_outline.levels, z) } else { 0.0 };
         // Without headings the level buttons still need a corner to sit in.
         if symbols && row_outline.levels > 0 && header_h == 0.0 {
-            band_h = band_h.max(crate::outline::lane(zoom) + 3.0);
+            band_h = band_h.max(crate::outline::lane(z) + 3.0);
         }
         if symbols && col_outline.levels > 0 && header_w == 0.0 {
-            band_w = band_w.max(crate::outline::lane(zoom) + 3.0);
+            band_w = band_w.max(crate::outline::lane(z) + 3.0);
         }
         let cells = Rect::from_min_max(pos2(rect.left() + band_w + header_w, rect.top() + band_h + header_h), rect.max);
         Geo {
@@ -92,7 +91,7 @@ impl Geo {
     pub fn paged(sh: &Sheet, rect: Rect, scroll: egui::Vec2, grid: Arc<gridcraft_engine::paper::PageGrid>) -> Geo {
         let mut g = Geo::new(sh, rect, scroll);
         let zoom = (sh.zoom as f32 / 100.0).clamp(0.1, 4.0);
-        g.z = zoom * DISPLAY_SCALE * grid.scale.clamp(0.1, 4.0);
+        g.z = zoom * grid.scale.clamp(0.1, 4.0);
         (g.fr, g.fc, g.frozen_w, g.frozen_h) = (0, 0, 0.0, 0.0);
         g.paper = Some(grid);
         g

@@ -31,8 +31,8 @@ fn explicit_left_and_right_keep_their_side_on_a_right_to_left_sheet() {
 
 #[test]
 fn heading_labels_scale_with_the_zoom_without_a_cap() {
-    use super::{DISPLAY_SCALE, heading_font_size};
-    let at = |percent: f32| heading_font_size(percent / 100.0 * DISPLAY_SCALE);
+    use super::heading_font_size;
+    let at = |percent: f32| heading_font_size(percent / 100.0);
     assert!((at(400.0) / at(100.0) - 4.0).abs() < 1e-4, "four times as large at 400%");
     assert!(at(200.0) > at(100.0) && at(400.0) > at(200.0));
     assert_eq!(at(10.0), 8.5, "never below a readable size");
