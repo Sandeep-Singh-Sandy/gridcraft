@@ -106,7 +106,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 "Paste Special…",
                 ["Home", "Clipboard"],
                 Some("Ctrl+Alt+V"),
-                "{what: all|formulas|values|formats|comments|validation|allExceptBorders|columnWidths|formulasAndNumberFormats|valuesAndNumberFormats, operation?: none|add|subtract|multiply|divide, skipBlanks?, transpose?, link?}",
+                "{what: all|allUsingSourceTheme|formulas|values|valuesAndSourceFormatting|formats|comments|validation|allExceptBorders|columnWidths|formulasAndNumberFormats|valuesAndNumberFormats, operation?: none|add|subtract|multiply|divide, skipBlanks?, transpose?, link?, keepColumnWidths?}",
                 has_clipboard,
                 paste_special
             )

@@ -1,5 +1,73 @@
 use super::controls::act;
-use super::{Align2, Cat, Rect, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, json, pos2, theme, vec2};
+use super::{Align2, Cat, Icon, Rect, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, icons, json, pos2, theme, vec2};
+
+/// One Paste gallery tile: the Paste Special `what` it runs, a short badge drawn over the clipboard
+/// (or brush) icon, and the tooltip. `Paste` itself is the plain `edit.paste`.
+type PasteTile = (&'static str, &'static str, &'static str);
+
+const PASTE_GROUPS: [(&str, &[PasteTile]); 3] = [
+    (
+        "Paste",
+        &[
+            ("all", "", "Paste (P)"),
+            ("formulas", "fx", "Formulas (F)"),
+            ("formulasAndNumberFormats", "%fx", "Formulas & Number Formatting (O)"),
+            ("allUsingSourceTheme", "Aa", "Keep Source Formatting (K)"),
+            ("allExceptBorders", "\u{2014}", "No Borders (B)"),
+            ("keepColumnWidths", "\u{2194}", "Keep Source Column Widths (W)"),
+            ("transpose", "T", "Transpose (T)"),
+        ],
+    ),
+    (
+        "Paste Values",
+        &[
+            ("values", "123", "Values (V)"),
+            ("valuesAndNumberFormats", "%123", "Values & Number Formatting (A)"),
+            ("valuesAndSourceFormatting", "A123", "Values & Source Formatting (E)"),
+        ],
+    ),
+    ("Other Paste Options", &[("formats", "", "Formatting (R)"), ("link", "=", "Paste Link (N)")]),
+];
+
+/// Excel's Paste gallery, offered once something is copied: three groups of icon tiles with
+/// tooltips, then Paste Special.
+pub(super) fn paste_gallery(app: &mut SheetApp, ui: &mut Ui) {
+    let t = Tokens::get(ui.ctx());
+    for (group, tiles) in PASTE_GROUPS {
+        ui.label(egui::RichText::new(app.ui.language.tr(group)).strong());
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = vec2(2.0, 2.0);
+            for &(what, badge, tip) in tiles {
+                let (r, resp) = ui.allocate_exact_size(vec2(36.0, 36.0), Sense::click());
+                if resp.hovered() {
+                    ui.painter().rect(r, 3.0, t.hover, Stroke::new(1.0, t.accent), StrokeKind::Inside);
+                }
+                let icon = if group == "Other Paste Options" && what == "formats" { Icon::Brush } else { Icon::Paste };
+                icons::paint(ui.painter(), Rect::from_center_size(r.center() - vec2(0.0, 2.0), vec2(22.0, 22.0)), icon, t.text);
+                if !badge.is_empty() {
+                    let corner = r.right_bottom() - vec2(3.0, 2.0);
+                    ui.painter().text(corner, Align2::RIGHT_BOTTOM, badge, theme::ui_font(9.5), t.accent);
+                }
+                let tip = app.ui.language.tr(tip).to_string();
+                if resp.on_hover_text(tip).clicked() {
+                    match what {
+                        "all" => app.paste_from_clipboard(),
+                        "link" => act(app, "edit.pasteSpecial", json!({"what": "all", "link": true})),
+                        "transpose" => act(app, "edit.pasteSpecial", json!({"what": "all", "transpose": true})),
+                        "keepColumnWidths" => act(app, "edit.pasteSpecial", json!({"what": "all", "keepColumnWidths": true})),
+                        what => act(app, "edit.pasteSpecial", json!({"what": what})),
+                    }
+                    ui.close();
+                }
+            }
+        });
+    }
+    ui.separator();
+    if ui.add(egui::Button::new(app.ui.language.tr("Paste Special…")).frame_when_inactive(false).min_size(vec2(220.0, 22.0))).clicked() {
+        app.open_dialog("pasteSpecial", json!({}));
+        ui.close();
+    }
+}
 
 /// A gallery of table styles drawn as mini tables.
 pub(super) fn table_gallery(app: &mut SheetApp, ui: &mut Ui, cmd: &str) {
