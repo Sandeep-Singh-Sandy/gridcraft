@@ -124,6 +124,67 @@ pub(super) fn margins_gallery(app: &mut SheetApp, ui: &mut Ui) {
     menu_items(app, ui, &[("Custom Margins…", "dialog:pageSetup", json!({}))]);
 }
 
+/// Papers Page Layout › Size lists: the name `pageLayout.size` takes and the label shown.
+const PAPER_SIZES: [(&str, &str); 19] = [
+    ("Letter", "Letter"),
+    ("Tabloid", "Tabloid"),
+    ("Legal", "Legal"),
+    ("Statement", "Statement"),
+    ("Executive", "Executive"),
+    ("A3", "A3"),
+    ("A4", "A4"),
+    ("A5", "A5"),
+    ("B4", "B4 (JIS)"),
+    ("B5", "B5 (JIS)"),
+    ("16K 195 x 270 mm", "16K"),
+    ("16K 184 x 260 mm", "16K"),
+    ("16K 197 x 273 mm", "16K"),
+    ("Japanese Postcard", "Japanese Postcard"),
+    ("Double Japan Postcard Rotated", "Double Japan Postcard Rotated"),
+    ("Envelope #10", "Envelope #10"),
+    ("Envelope Monarch", "Envelope Monarch"),
+    ("Envelope B5", "Envelope B5"),
+    ("Envelope C5", "Envelope C5"),
+];
+
+/// Page Layout › Size as Excel lists it: a scrolling row per paper with a page drawn to its
+/// proportions, its name and its size in centimetres, the sheet's paper outlined, and
+/// "More Paper Sizes…" at the end.
+pub(super) fn size_gallery(app: &mut SheetApp, ui: &mut Ui) {
+    use gridcraft_engine::cmd::print::paper_size;
+    let t = Tokens::get(ui.ctx());
+    let lang = app.ui.language;
+    let current = app.session.active().and_then(|d| d.wb.active()).map(|sh| paper_size(&sh.print.paper));
+    // Two decimals without trailing zeros: 21, 29.7, 27.94.
+    let cm = |pt: f32| format!("{:.2}", f64::from(pt) * 2.54 / 72.0).trim_end_matches('0').trim_end_matches('.').to_string();
+    ui.set_min_width(260.0);
+    egui::ScrollArea::vertical().max_height(380.0).show(ui, |ui| {
+        for (name, label) in PAPER_SIZES {
+            let (w, h) = paper_size(name);
+            let (r, resp) = ui.allocate_exact_size(vec2(260.0, 46.0), Sense::click());
+            if resp.hovered() {
+                ui.painter().rect_filled(r, 3.0, t.hover);
+            }
+            if current == Some((w, h)) {
+                ui.painter().rect_stroke(r.shrink(1.0), 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
+            }
+            let k = (28.0 / w).min(34.0 / h);
+            let page = Rect::from_center_size(pos2(r.left() + 24.0, r.center().y), vec2(w * k, h * k));
+            ui.painter().rect_filled(page, 0.0, t.grid_bg);
+            ui.painter().rect_stroke(page, 0.0, Stroke::new(1.0, t.text_dim), StrokeKind::Inside);
+            ui.painter().text(r.left_top() + vec2(52.0, 6.0), Align2::LEFT_TOP, lang.tr(label), theme::ui_bold(12.0), t.text);
+            let size = format!("{} cm x {} cm", cm(w), cm(h));
+            ui.painter().text(r.left_top() + vec2(52.0, 24.0), Align2::LEFT_TOP, size, theme::ui_font(11.0), t.text_dim);
+            if resp.clicked() {
+                act(app, "pageLayout.size", json!({"paper": name}));
+                ui.close();
+            }
+        }
+    });
+    ui.separator();
+    menu_items(app, ui, &[("More Paper Sizes…", "dialog:pageSetup", json!({}))]);
+}
+
 /// A gallery of table styles drawn as mini tables.
 pub(super) fn table_gallery(app: &mut SheetApp, ui: &mut Ui, cmd: &str) {
     ui.set_width(430.0);

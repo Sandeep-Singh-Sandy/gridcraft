@@ -58,7 +58,7 @@ pub use gridcraft_core::color::INDEXED;
 /// Paper sizes (`pageSetup paperSize`) we name. ID 12/13 are the JIS B4/B5 that
 /// `pageLayout.pageSetup` calls `B4`/`B5`; 42 is ISO B4, and 43–88 are the Japanese postcards,
 /// envelopes and B6. The engine's `known_paper` uses the same names and sizes.
-const PAPERS: [(u32, &str); 23] = [
+const PAPERS: [(u32, &str); 26] = [
     (1, "Letter"),
     (3, "Tabloid"),
     (4, "Ledger"),
@@ -72,7 +72,9 @@ const PAPERS: [(u32, &str); 23] = [
     (13, "B5"),
     (20, "Envelope #10"),
     (27, "Envelope DL"),
+    (28, "Envelope C5"),
     (34, "Envelope B5"),
+    (37, "Envelope Monarch"),
     (42, "B4 (ISO)"),
     (43, "Japanese Postcard"),
     (69, "Japanese Double Postcard"),
@@ -81,6 +83,7 @@ const PAPERS: [(u32, &str); 23] = [
     (72, "Japanese Envelope Kaku #3"),
     (73, "Japanese Envelope #3"),
     (74, "Japanese Envelope #4"),
+    (82, "Double Japan Postcard Rotated"),
     (88, "B6"),
 ];
 
@@ -408,9 +411,14 @@ mod tests {
             ("Japanese Envelope #3", 73),
             ("chou #4", 74),
             ("B6 (JIS)", 88),
+            ("Envelope C5", 28),
+            ("envelope monarch", 37),
+            ("Double Japan Postcard Rotated", 82),
         ] {
             assert_eq!(paper_id(name), Some(id), "{name}");
         }
+        // The 16K sizes have no ID of their own in the file format.
+        assert_eq!(paper_id("16K 195 x 270 mm"), None);
         assert_eq!(paper_id("Napkin"), None);
     }
 }
