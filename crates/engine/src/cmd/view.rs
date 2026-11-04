@@ -304,13 +304,16 @@ fn paper(s: &mut Session, p: &Json) -> Result<Json> {
     })
 }
 
+/// The margin presets of Page Layout › Margins: key, label and [left, right, top, bottom, header,
+/// footer] in inches.
+pub const MARGIN_PRESETS: [(&str, &str, [f32; 6]); 3] = [
+    ("normal", "Normal", [0.7, 0.7, 0.75, 0.75, 0.3, 0.3]),
+    ("wide", "Wide", [1.0, 1.0, 1.0, 1.0, 0.5, 0.5]),
+    ("narrow", "Narrow", [0.25, 0.25, 0.75, 0.75, 0.3, 0.3]),
+];
+
 fn margins(s: &mut Session, p: &Json) -> Result<Json> {
-    let preset = match str_param(p, "preset") {
-        Some("wide") => Some([1.0, 1.0, 1.0, 1.0, 0.5, 0.5]),
-        Some("narrow") => Some([0.25, 0.25, 0.75, 0.75, 0.3, 0.3]),
-        Some("normal") => Some([0.7, 0.7, 0.75, 0.75, 0.3, 0.3]),
-        _ => None,
-    };
+    let preset = str_param(p, "preset").and_then(|name| MARGIN_PRESETS.iter().find(|(key, ..)| *key == name)).map(|(.., m)| *m);
     edit(s, |cx| {
         let si = cx.sheet_index();
         let m = &mut cx.sheet_mut(si)?.print.margins;
@@ -543,6 +546,23 @@ mod tests {
         s.execute("view.zoom", json!({"percent": 150})).unwrap();
         assert_eq!(s.execute("view.zoom100", json!({})).unwrap()["zoom"], 100);
         assert_eq!(s.doc().unwrap().wb.active().unwrap().zoom, 100);
+    }
+
+    #[test]
+    fn margin_presets_are_excels_in_inches() {
+        let mut s = Session::new();
+        s.new_workbook();
+        let margins = |s: &Session| s.doc().unwrap().wb.active().unwrap().print.margins;
+        for (key, _, expected) in MARGIN_PRESETS {
+            s.execute("pageLayout.margins", json!({"preset": key})).unwrap();
+            assert_eq!(margins(&s), expected, "{key}");
+        }
+        // Normal is 1.78 cm left and right, 1.91 cm top and bottom, 0.76 cm header and footer.
+        let cm = |inches: f32| (f64::from(inches) * 2.54 * 100.0).round() / 100.0;
+        assert_eq!([0, 2, 4].map(|i| cm(MARGIN_PRESETS[0].2[i])), [1.78, 1.91, 0.76]);
+        // One edge changes on its own, so a remembered custom setting can be restored edge by edge.
+        s.execute("pageLayout.margins", json!({"preset": "wide", "left": 0.5})).unwrap();
+        assert_eq!(margins(&s), [0.5, 1.0, 1.0, 1.0, 0.5, 0.5]);
     }
 
     #[test]
