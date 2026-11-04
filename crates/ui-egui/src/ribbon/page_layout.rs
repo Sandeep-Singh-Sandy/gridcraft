@@ -1,5 +1,5 @@
 use super::controls::{act, anchor_keytip, checkbox_on, control_keytip, invoke, keytip, menu_items, sep};
-use super::galleries::margins_gallery;
+use super::galleries::{margins_gallery, size_gallery};
 use super::{Color32, Icon, Sense, SheetApp, Tokens, Ui, big_button, json, keytip_table, vec2};
 
 pub(super) fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
@@ -38,35 +38,7 @@ pub(super) fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
     });
     let s = big_button(ui, Icon::Paper, "Size", "Paper Size", true);
     control_keytip(app, ui, &s, "pageLayout.size");
-    egui::Popup::menu(&s).show(|ui| {
-        // B4/B5/B6 are the JIS sizes Japanese Excel uses; the ISO ones stay selectable by name.
-        for p in [
-            "Letter",
-            "Legal",
-            "Tabloid",
-            "Executive",
-            "A3",
-            "A4",
-            "A5",
-            "A6",
-            "B4",
-            "B5",
-            "B6",
-            "Japanese Postcard",
-            "Japanese Double Postcard",
-            "Japanese Envelope #3",
-            "Japanese Envelope #4",
-            "Japanese Envelope Kaku #2",
-            "Japanese Envelope Kaku #3",
-            "B4 (ISO)",
-            "B5 (ISO)",
-            "B6 (ISO)",
-        ] {
-            if ui.button(p).clicked() {
-                act(app, "pageLayout.size", json!({"paper": p}));
-            }
-        }
-    });
+    egui::Popup::menu(&s).show(|ui| size_gallery(app, ui));
     let pa = big_button(ui, Icon::PrintArea, "Print\nArea", "Print Area", true);
     anchor_keytip(app, ui, &pa, &["pageLayout.printArea"]);
     egui::Popup::menu(&pa).show(|ui| {
