@@ -69,6 +69,8 @@ pub(super) fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
         app.open_dialog("pageSetup", json!({"tab": "Sheet"}));
     }
     sep(ui);
+    scale_to_fit(app, ui);
+    sep(ui);
     let sh = app
         .session
         .active()
@@ -117,4 +119,65 @@ pub(super) fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
     if r.clicked() {
         act(app, "view.rightToLeft", json!({"on": !rtl}));
     }
+}
+
+/// The Scale to Fit group: Width and Height in pages (Automatic, 1–9, or more in Page Setup) and
+/// a Scale percentage that is only available while both are Automatic, as in Excel.
+fn scale_to_fit(app: &mut SheetApp, ui: &mut Ui) {
+    let lang = app.ui.language;
+    let t = Tokens::get(ui.ctx());
+    let (fit, scale) = app.session.active().and_then(|d| d.wb.active()).map_or((None, 100), |s| (s.print.fit_to, s.print.scale));
+    let pages = |n: u16| match n {
+        0 => lang.tr("Automatic").to_string(),
+        1 => lang.tr("1 page").to_string(),
+        n => format!("{n} {}", lang.tr("pages")),
+    };
+    ui.vertical(|ui| {
+        for (key, label, now) in [("width", "Width:", fit.map_or(0, |f| f.0)), ("height", "Height:", fit.map_or(0, |f| f.1))] {
+            ui.horizontal(|ui| {
+                let name = ui.add_sized([44.0, 20.0], egui::Label::new(lang.tr(label)));
+                craft_ui::ComboBox::from_id_salt(("scale_to_fit", key))
+                    .selected_text(pages(now))
+                    .width(90.0)
+                    .show_ui(ui, |ui| {
+                        for n in 0..=9 {
+                            if ui.selectable_label(now == n, pages(n)).clicked() {
+                                act(app, "pageLayout.scaleToFit", json!({ (key): n }));
+                            }
+                        }
+                        if ui.selectable_label(false, lang.tr("More Pages…")).clicked() {
+                            app.open_dialog("pageSetup", json!({}));
+                        }
+                    })
+                    .response
+                    .labelled_by(name.id);
+            });
+        }
+        ui.horizontal(|ui| {
+            ui.add_sized([44.0, 20.0], egui::Label::new(lang.tr("Scale:")));
+            // The value is held while it is dragged or typed, so one change is one undo step.
+            let held = ui.id().with("scale_to_fit_value");
+            let mut value = ui.data(|d| d.get_temp::<u16>(held)).unwrap_or(scale);
+            let drag = egui::DragValue::new(&mut value).range(10..=400).suffix("%");
+            let r = ui.add_enabled(fit.is_none(), drag);
+            if r.dragged() || r.has_focus() {
+                ui.data_mut(|d| d.insert_temp(held, value));
+            } else {
+                ui.data_mut(|d| d.remove_temp::<u16>(held));
+                if value != scale {
+                    act(app, "pageLayout.scaleToFit", json!({"scale": value}));
+                }
+            }
+            // Excel's dialog launcher: the corner arrow that opens Page Setup.
+            let (corner, launcher) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::click());
+            let stroke = egui::Stroke::new(1.0, if launcher.hovered() { t.accent } else { t.text_dim });
+            let (a, b) = (corner.left_top() + vec2(3.0, 3.0), corner.right_bottom() - vec2(3.0, 3.0));
+            for (from, to) in [(a, b), (b - vec2(5.0, 0.0), b), (b - vec2(0.0, 5.0), b)] {
+                ui.painter().line_segment([from, to], stroke);
+            }
+            if launcher.on_hover_text(lang.tr("Page Setup")).clicked() {
+                app.open_dialog("pageSetup", json!({}));
+            }
+        });
+    });
 }
