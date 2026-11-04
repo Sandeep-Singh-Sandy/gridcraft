@@ -1,4 +1,4 @@
-use super::controls::act;
+use super::controls::{act, menu_items};
 use super::{Align2, Cat, Icon, Rect, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, icons, json, pos2, theme, vec2};
 
 /// One Paste gallery tile: the Paste Special `what` it runs, a short badge drawn over the clipboard
@@ -40,7 +40,8 @@ pub(super) fn paste_gallery(app: &mut SheetApp, ui: &mut Ui) {
             for &(what, badge, tip) in tiles {
                 let (r, resp) = ui.allocate_exact_size(vec2(36.0, 36.0), Sense::click());
                 if resp.hovered() {
-                    ui.painter().rect(r, 3.0, t.hover, Stroke::new(1.0, t.accent), StrokeKind::Inside);
+                    ui.painter().rect_filled(r, 3.0, t.hover);
+                    ui.painter().rect_stroke(r, 3.0, Stroke::new(1.0, t.accent), StrokeKind::Inside);
                 }
                 let icon = if group == "Other Paste Options" && what == "formats" { Icon::Brush } else { Icon::Paste };
                 icons::paint(ui.painter(), Rect::from_center_size(r.center() - vec2(0.0, 2.0), vec2(22.0, 22.0)), icon, t.text);
@@ -67,6 +68,60 @@ pub(super) fn paste_gallery(app: &mut SheetApp, ui: &mut Ui) {
         app.open_dialog("pasteSpecial", json!({}));
         ui.close();
     }
+}
+
+/// Page Layout › Margins as Excel lists it: a row per preset with its six margins in centimetres
+/// and a page drawn with them, the sheet's current setting outlined, and "Last Custom Setting"
+/// once margins were typed in Page Setup.
+pub(super) fn margins_gallery(app: &mut SheetApp, ui: &mut Ui) {
+    use gridcraft_engine::cmd::view::MARGIN_PRESETS;
+    let t = Tokens::get(ui.ctx());
+    let lang = app.ui.language;
+    let same = |a: &[f32; 6], b: &[f32; 6]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.005);
+    let current = app.session.active().and_then(|d| d.wb.active()).map(|sh| sh.print.margins);
+    // Remembered for the session, so the entry stays after a preset replaces the custom margins.
+    let memory = egui::Id::new("last_custom_margins");
+    if let Some(m) = current.filter(|m| !MARGIN_PRESETS.iter().any(|(.., p)| same(m, p))) {
+        ui.ctx().data_mut(|d| d.insert_temp(memory, m));
+    }
+    let custom: Option<[f32; 6]> = ui.ctx().data(|d| d.get_temp(memory));
+    let mut rows: Vec<(&str, [f32; 6], serde_json::Value)> =
+        MARGIN_PRESETS.iter().map(|(key, label, m)| (*label, *m, json!({"preset": key}))).collect();
+    if let Some(m) = custom {
+        let names = ["left", "right", "top", "bottom", "header", "footer"];
+        rows.push(("Last Custom Setting", m, json!(names.iter().zip(m).map(|(k, v)| (k.to_string(), json!(v))).collect::<serde_json::Map<_, _>>())));
+    }
+    ui.set_min_width(300.0);
+    for (label, m, params) in rows {
+        let (r, resp) = ui.allocate_exact_size(vec2(300.0, 60.0), Sense::click());
+        if resp.hovered() {
+            ui.painter().rect_filled(r, 3.0, t.hover);
+        }
+        if current.is_some_and(|c| same(&c, &m)) {
+            ui.painter().rect_stroke(r.shrink(1.0), 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
+        }
+        // A letter page with the margins marked, drawn 2.7 points to the inch.
+        let page = Rect::from_min_size(r.left_top() + vec2(10.0, 8.0), vec2(8.5 * 2.7, 11.0 * 2.7));
+        ui.painter().rect_filled(page, 0.0, t.grid_bg);
+        ui.painter().rect_stroke(page, 0.0, Stroke::new(1.0, t.text_dim), StrokeKind::Inside);
+        let inner = Rect::from_min_max(page.min + vec2(m[0], m[2]) * 2.7, page.max - vec2(m[1], m[3]) * 2.7);
+        ui.painter().rect_stroke(inner, 0.0, Stroke::new(1.0, t.accent), StrokeKind::Inside);
+        let cm = |i: usize| format!("{:.2} cm", f64::from(m[i]) * 2.54);
+        let text = |ui: &Ui, s: String, y: f32, bold: bool| {
+            let font = if bold { theme::ui_bold(12.0) } else { theme::ui_font(11.0) };
+            ui.painter().text(r.left_top() + vec2(48.0, y), Align2::LEFT_TOP, s, font, t.text);
+        };
+        text(ui, lang.tr(label).to_string(), 4.0, true);
+        for (row, (a, ia, b, ib)) in [("Top:", 2, "Bottom:", 3), ("Left:", 0, "Right:", 1), ("Header:", 4, "Footer:", 5)].into_iter().enumerate() {
+            text(ui, format!("{} {}   {} {}", lang.tr(a), cm(ia), lang.tr(b), cm(ib)), 20.0 + row as f32 * 13.0, false);
+        }
+        if resp.clicked() {
+            act(app, "pageLayout.margins", params);
+            ui.close();
+        }
+    }
+    ui.separator();
+    menu_items(app, ui, &[("Custom Margins…", "dialog:pageSetup", json!({}))]);
 }
 
 /// A gallery of table styles drawn as mini tables.
