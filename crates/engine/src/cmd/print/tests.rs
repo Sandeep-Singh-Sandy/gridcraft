@@ -580,6 +580,24 @@ fn japanese_paper_sizes_are_jis() {
     let chou4 = paper_size("Japanese Envelope #4");
     assert_eq!((chou4.0, chou4.1), (255.12, 581.10));
     assert_eq!(chou4, paper_size("chou #4"));
+    // The sizes Page Layout › Size lists are known by name, not Letter by default.
+    for name in [
+        "Statement",
+        "Envelope #10",
+        "Envelope Monarch",
+        "Envelope B5",
+        "Envelope C5",
+        "Envelope DL",
+        "Double Japan Postcard Rotated",
+        "16K 195 x 270 mm",
+        "16K 184 x 260 mm",
+        "16K 197 x 273 mm",
+    ] {
+        assert_ne!(paper_size(name), (612.0, 792.0), "{name}");
+    }
+    assert_eq!(paper_size("Statement"), (396.0, 612.0));
+    let (w, h) = paper_size("16K 195 x 270 mm");
+    assert!((w / 72.0 * 25.4 - 195.0).abs() < 0.1 && (h / 72.0 * 25.4 - 270.0).abs() < 0.1);
     // Unknown names keep the old Letter fallback.
     assert_eq!(paper_size("Napkin"), (612.0, 792.0));
 }

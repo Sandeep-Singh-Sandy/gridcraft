@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Size",
             ["Page Layout", "Page Setup"],
             None,
-            "{paper: Letter|Legal|A4|A3|A5|A6|Tabloid|Executive|Ledger|B4|B5|B6|B4 (ISO)|B5 (ISO)|B6 (ISO)|Japanese Postcard|Japanese Double Postcard|Japanese Envelope #3|Japanese Envelope #4|Japanese Envelope Kaku #2|Japanese Envelope Kaku #3 (B4/B5/B6 are the JIS sizes)}",
+            "{paper: Letter|Legal|A4|A3|A5|A6|Tabloid|Executive|Ledger|B4|B5|B6|B4 (ISO)|B5 (ISO)|B6 (ISO)|Japanese Postcard|Japanese Double Postcard|Japanese Envelope #3|Japanese Envelope #4|Japanese Envelope Kaku #2|Japanese Envelope Kaku #3|Statement|Envelope #10|Envelope Monarch|Envelope B5|Envelope C5|Envelope DL|Double Japan Postcard Rotated|16K 195 x 270 mm|16K 184 x 260 mm|16K 197 x 273 mm (B4/B5/B6 are the JIS sizes)}",
             has_doc,
             paper
         ),
