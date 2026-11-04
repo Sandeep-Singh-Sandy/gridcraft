@@ -380,7 +380,11 @@ fn scale_fit(s: &mut Session, p: &Json) -> Result<Json> {
             pr.fit_to = None;
         }
         if p.get("width").is_some() || p.get("height").is_some() {
-            pr.fit_to = Some((u32_param(p, "width").unwrap_or(0).min(32767) as u16, u32_param(p, "height").unwrap_or(0).min(32767) as u16));
+            // An axis left out keeps its setting; Automatic (0) on both turns fitting off.
+            let (w, h) = pr.fit_to.unwrap_or((0, 0));
+            let axis = |key: &str, old: u16| u32_param(p, key).map_or(old, |v| v.min(32767) as u16);
+            let fit = (axis("width", w), axis("height", h));
+            pr.fit_to = (fit != (0, 0)).then_some(fit);
         }
         Ok(Json::Null)
     })
@@ -563,6 +567,23 @@ mod tests {
         // One edge changes on its own, so a remembered custom setting can be restored edge by edge.
         s.execute("pageLayout.margins", json!({"preset": "wide", "left": 0.5})).unwrap();
         assert_eq!(margins(&s), [0.5, 1.0, 1.0, 1.0, 0.5, 0.5]);
+    }
+
+    #[test]
+    fn scale_to_fit_axes_are_set_one_at_a_time() {
+        let mut s = Session::new();
+        s.new_workbook();
+        let fit = |s: &Session| s.doc().unwrap().wb.active().unwrap().print.fit_to;
+        s.execute("pageLayout.scaleToFit", json!({"width": 1})).unwrap();
+        assert_eq!(fit(&s), Some((1, 0)));
+        s.execute("pageLayout.scaleToFit", json!({"height": 3})).unwrap();
+        assert_eq!(fit(&s), Some((1, 3)), "setting the height keeps the width");
+        s.execute("pageLayout.scaleToFit", json!({"width": 0, "height": 0})).unwrap();
+        assert_eq!(fit(&s), None, "Automatic on both axes is no fitting");
+        s.execute("pageLayout.scaleToFit", json!({"width": 2})).unwrap();
+        s.execute("pageLayout.scaleToFit", json!({"scale": 80})).unwrap();
+        assert_eq!(fit(&s), None, "a scale replaces fitting");
+        assert_eq!(s.doc().unwrap().wb.active().unwrap().print.scale, 80);
     }
 
     #[test]
