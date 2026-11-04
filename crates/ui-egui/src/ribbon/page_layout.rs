@@ -1,4 +1,5 @@
 use super::controls::{act, anchor_keytip, checkbox_on, control_keytip, invoke, keytip, menu_items, sep};
+use super::galleries::margins_gallery;
 use super::{Color32, Icon, Sense, SheetApp, Tokens, Ui, big_button, json, keytip_table, vec2};
 
 pub(super) fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
@@ -22,18 +23,7 @@ pub(super) fn page_layout(app: &mut SheetApp, ui: &mut Ui) {
     for sequence in keytip_table::group_extension(app.keytips.prefix().unwrap_or_default(), &["pageLayout.margins", "dialog:pageSetup"]) {
         keytip(app, ui, sequence, m.rect.center_bottom());
     }
-    egui::Popup::menu(&m).show(|ui| {
-        menu_items(
-            app,
-            ui,
-            &[
-                ("Normal", "pageLayout.margins", json!({"preset": "normal"})),
-                ("Wide", "pageLayout.margins", json!({"preset": "wide"})),
-                ("Narrow", "pageLayout.margins", json!({"preset": "narrow"})),
-                ("Custom Margins…", "dialog:pageSetup", json!({})),
-            ],
-        );
-    });
+    egui::Popup::menu(&m).show(|ui| margins_gallery(app, ui));
     let o = big_button(ui, Icon::Orient, "Page Layout|Orientation", "Page Layout|Orientation", true);
     control_keytip(app, ui, &o, "pageLayout.orientation");
     egui::Popup::menu(&o).show(|ui| {
