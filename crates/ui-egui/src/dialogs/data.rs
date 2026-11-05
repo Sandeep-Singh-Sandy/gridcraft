@@ -49,6 +49,17 @@ pub(super) fn remove_duplicates_range(app: &SheetApp, sel: &str) -> String {
     range.a1()
 }
 
+/// What Create Table starts from: the selection, or the region around a lone cell, as absolute
+/// references, and whether its first row looks like headers (all text, with data below), which is
+/// how Excel ticks the box.
+pub(super) fn create_table_defaults(app: &SheetApp) -> Json {
+    let Some((d, sh)) = app.session.active().and_then(|d| Some((d, d.wb.active()?))) else { return json!({}) };
+    let sel = d.selection.current();
+    let r = if sel.is_single() { gridcraft_engine::selection::current_region(sh, d.selection.active) } else { sel };
+    let header = r.height() > 1 && (r.start.col..=r.end.col).all(|c| sh.value(gridcraft_engine::core::CellRef::new(r.start.row, c)).is_text());
+    json!({"range": abs(&r), "header": header})
+}
+
 pub(super) fn abs(r: &gridcraft_engine::core::RangeRef) -> String {
     let a = |c: gridcraft_engine::core::CellRef| format!("${}${}", gridcraft_engine::core::col_to_letters(c.col), c.row + 1);
     if r.is_single() { a(r.start) } else { format!("{}:{}", a(r.start), a(r.end)) }
