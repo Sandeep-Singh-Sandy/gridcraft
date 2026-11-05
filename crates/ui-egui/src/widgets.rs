@@ -374,6 +374,22 @@ pub fn color_palette_fixed(ui: &mut Ui, theme_colors: &[u32; 12], none_label: &s
     palette(ui, theme_colors, none_label, false)
 }
 
+/// Size of a colour swatch in the palette.
+const SWATCH: egui::Vec2 = egui::vec2(20.0, 18.0);
+
+/// The tint of the Theme Colors swatch at `col`, `row`; row 0 is the colour itself. The five
+/// variations are Excel's: White darkens, Black lightens, Background 2 darkens in wider steps, and
+/// the other columns lighten three steps then darken two.
+fn theme_tint(col: usize, row: usize) -> f64 {
+    let steps: [f64; 5] = match col {
+        0 => [-0.05, -0.15, -0.25, -0.35, -0.5],
+        1 => [0.5, 0.35, 0.25, 0.15, 0.05],
+        2 => [-0.1, -0.25, -0.5, -0.75, -0.9],
+        _ => [0.8, 0.6, 0.4, -0.25, -0.5],
+    };
+    row.checked_sub(1).and_then(|i| steps.get(i)).copied().unwrap_or(0.0)
+}
+
 /// Shared body of [`color_palette`] and [`color_palette_fixed`]: a 7×10 palette (six tinted theme rows
 /// above ten standard colours), then Recent Colors; the separator and More Colors… button appear only
 /// when `more_colors` is true; an existing picker state renders while open. Arrow keys move a highlight
@@ -457,7 +473,7 @@ fn palette(ui: &mut Ui, theme_colors: &[u32; 12], none_label: &str, more_colors:
     if ent && let Some((r, c)) = cur {
         picked = Some(if r < ROWS - 1 {
             let base = theme_colors.get(c).copied().unwrap_or(0);
-            theme_hex(base, [0.0f64, 0.8, 0.6, 0.4, -0.25, -0.5][r])
+            theme_hex(base, theme_tint(c, r))
         } else {
             std_hex[c].to_string()
         });
@@ -467,26 +483,28 @@ fn palette(ui: &mut Ui, theme_colors: &[u32; 12], none_label: &str, more_colors:
         picked = Some("none".to_string());
     }
     ui.label(egui::RichText::new("Theme Colors").small());
-    let order = [0usize, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let tints = [0.0f64, 0.8, 0.6, 0.4, -0.25, -0.5];
-    egui::Grid::new(ui.scope_id().with("theme_grid")).spacing(vec2(2.0, 2.0)).show(ui, |ui| {
-        for (row, tint) in tints.iter().enumerate() {
-            for (col, &i) in order.iter().enumerate() {
-                let base = theme_colors.get(i).copied().unwrap_or(0);
-                let rgb = [(base >> 16) as u8, (base >> 8) as u8, base as u8];
-                let c = gridcraft_engine::model::style::apply_tint(rgb, *tint);
-                let col32 = Color32::from_rgb(c[0], c[1], c[2]);
-                let (r, resp) = ui.allocate_exact_size(vec2(16.0, 14.0), Sense::click());
-                ui.painter().rect_filled(r, 1.0, col32);
-                ui.painter().rect_stroke(r, 1.0, Stroke::new(1.0, t.separator), StrokeKind::Inside);
-                if resp.hovered() || cur == Some((row, col)) {
-                    ui.painter().rect_stroke(r.expand(1.0), 1.0, Stroke::new(1.5, t.cat(Cat::Orange)), StrokeKind::Outside);
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing = vec2(2.0, 2.0);
+        for row in 0..ROWS - 1 {
+            ui.horizontal(|ui| {
+                for col in 0..COLS {
+                    let (base, tint) = (theme_colors.get(col).copied().unwrap_or(0), theme_tint(col, row));
+                    let rgb = gridcraft_engine::model::style::apply_tint([(base >> 16) as u8, (base >> 8) as u8, base as u8], tint);
+                    let (r, resp) = ui.allocate_exact_size(SWATCH, Sense::click());
+                    ui.painter().rect_filled(r, 1.0, Color32::from_rgb(rgb[0], rgb[1], rgb[2]));
+                    ui.painter().rect_stroke(r, 1.0, Stroke::new(1.0, t.separator), StrokeKind::Inside);
+                    if resp.hovered() || cur == Some((row, col)) {
+                        ui.painter().rect_stroke(r.expand(1.0), 1.0, Stroke::new(1.5, t.cat(Cat::Orange)), StrokeKind::Outside);
+                    }
+                    if resp.clicked() {
+                        picked = Some(theme_hex(base, tint));
+                    }
                 }
-                if resp.clicked() {
-                    picked = Some(theme_hex(base, *tint));
-                }
+            });
+            // The colours themselves sit apart from their variations, as in Excel.
+            if row == 0 {
+                ui.add_space(4.0);
             }
-            ui.end_row();
         }
     });
     ui.label(egui::RichText::new("Standard Colors").small());
@@ -497,7 +515,7 @@ fn palette(ui: &mut Ui, theme_colors: &[u32; 12], none_label: &str, more_colors:
                 .and_then(|c| c.resolve(&Default::default()))
                 .map(theme::color32)
                 .unwrap_or(Color32::BLACK);
-            let (r, resp) = ui.allocate_exact_size(vec2(16.0, 14.0), Sense::click());
+            let (r, resp) = ui.allocate_exact_size(SWATCH, Sense::click());
             ui.painter().rect_filled(r, 1.0, c);
             if resp.hovered() || cur == Some((ROWS - 1, col)) {
                 ui.painter().rect_stroke(r.expand(1.0), 1.0, Stroke::new(1.5, t.cat(Cat::Orange)), StrokeKind::Outside);
@@ -515,7 +533,7 @@ fn palette(ui: &mut Ui, theme_colors: &[u32; 12], none_label: &str, more_colors:
             ui.spacing_mut().item_spacing.x = 2.0;
             for hex in &recent {
                 let c = parse_hex(hex).map_or(Color32::BLACK, |c| Color32::from_rgb(c[0], c[1], c[2]));
-                let (r, resp) = ui.allocate_exact_size(vec2(16.0, 14.0), Sense::click());
+                let (r, resp) = ui.allocate_exact_size(SWATCH, Sense::click());
                 ui.painter().rect_filled(r, 1.0, c);
                 ui.painter().rect_stroke(r, 1.0, Stroke::new(1.0, Color32::from_gray(200)), StrokeKind::Inside);
                 if resp.hovered() {
@@ -772,5 +790,22 @@ mod tooltip_shortcut_tests {
 
             assert_eq!(actual, expected, "{os:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod palette_tests {
+    use super::theme_tint;
+
+    #[test]
+    fn theme_variations_match_excels() {
+        let column = |col: usize| (0..6).map(|row| theme_tint(col, row)).collect::<Vec<_>>();
+        assert_eq!(column(0), [0.0, -0.05, -0.15, -0.25, -0.35, -0.5], "White darkens");
+        assert_eq!(column(1), [0.0, 0.5, 0.35, 0.25, 0.15, 0.05], "Black lightens");
+        assert_eq!(column(2), [0.0, -0.1, -0.25, -0.5, -0.75, -0.9], "Background 2 darkens in wider steps");
+        for col in 3..10 {
+            assert_eq!(column(col), [0.0, 0.8, 0.6, 0.4, -0.25, -0.5], "text 2 and the accents");
+        }
+        assert_eq!(theme_tint(9, 6), 0.0, "past the last row is the colour itself");
     }
 }
