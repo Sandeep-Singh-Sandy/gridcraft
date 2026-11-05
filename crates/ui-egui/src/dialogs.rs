@@ -31,7 +31,7 @@ mod zoom;
 
 use analysis::toolpak_defaults;
 use charts::select_chart;
-use data::{abs, data_validation_fields, remove_duplicates_range, validation_defaults};
+use data::{abs, create_table_defaults, data_validation_fields, remove_duplicates_range, validation_defaults};
 use find::go_to_entries;
 pub(crate) use names::insert_name;
 use names::pasteable_names;
@@ -641,6 +641,22 @@ impl Dialog {
                 ],
                 json!({"tab": true, "comma": true, "destination": active}),
             ),
+            "createTable" => {
+                // Format as Table brings the style it was opened from; Insert › Table takes the default.
+                let style = p("style");
+                let command = if style.is_string() { "home.formatAsTable" } else { "insert.table" };
+                let mut defaults = create_table_defaults(app);
+                if style.is_string() {
+                    defaults["style"] = style;
+                }
+                Dialog::form(
+                    "createTable",
+                    "Create Table",
+                    command,
+                    vec![Ref { key: "range", label: "Where is the data for your table?" }, Check { key: "header", label: "My table has headers" }],
+                    defaults,
+                )
+            }
             "removeDuplicates" => Dialog::form(
                 "removeDuplicates",
                 "Remove Duplicates",
@@ -1144,6 +1160,27 @@ mod tests {
         let mut app = SheetApp::new(session, Default::default());
         let dialog = Dialog::open(&mut app, "removeDuplicates", json!({})).unwrap();
         assert_eq!(dialog.values.get("range"), Some(&json!("B2:C4")));
+    }
+
+    #[test]
+    fn create_table_starts_from_the_region_and_guesses_the_header() {
+        let mut session = gridcraft_engine::Session::default();
+        session.new_workbook();
+        session.execute("range.setValues", json!({"range": "B2:C4", "values": [["Item", "Qty"], ["a", 1], ["b", 2]]})).unwrap();
+        session.execute("selection.set", json!({"range": "C3"})).unwrap();
+        let mut app = SheetApp::new(session, Default::default());
+        let mut dialog = Dialog::open(&mut app, "createTable", json!({})).unwrap();
+        assert_eq!(dialog.command, Some("insert.table"));
+        assert_eq!(dialog.values["range"], "$B$2:$C$4");
+        assert_eq!(dialog.values["header"], true, "an all-text first row reads as headers");
+        // OK creates the table over the range asked for, without a header when the box is cleared.
+        dialog.set_value("header", json!(false));
+        app.run(dialog.command.unwrap(), build_params(&dialog)).unwrap();
+        assert_eq!(app.session.active().unwrap().wb.active().unwrap().tables.len(), 1);
+        // Format as Table brings its style along to its own command.
+        let styled = Dialog::open(&mut app, "createTable", json!({"style": "TableStyleLight9"})).unwrap();
+        assert_eq!(styled.command, Some("home.formatAsTable"));
+        assert_eq!(styled.values["style"], "TableStyleLight9");
     }
 
     #[test]

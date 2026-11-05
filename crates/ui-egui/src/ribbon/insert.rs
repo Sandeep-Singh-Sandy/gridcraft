@@ -11,7 +11,7 @@ pub(super) fn insert(app: &mut SheetApp, ui: &mut Ui) {
     let __k = big_button(ui, Icon::Table, "Table", "Table", false);
     control_keytip(app, ui, &__k, "insert.table");
     if __k.clicked() {
-        act(app, "insert.table", json!({}));
+        app.open_dialog("createTable", json!({}));
     }
     sep(ui);
     let pic = big_button(ui, Icon::Picture, "Pictures", "Insert a picture", true);
