@@ -125,7 +125,7 @@ pub(super) fn margins_gallery(app: &mut SheetApp, ui: &mut Ui) {
 }
 
 /// Papers Page Layout › Size lists: the name `pageLayout.size` takes and the label shown.
-const PAPER_SIZES: [(&str, &str); 19] = [
+const PAPER_SIZES: [(&str, &str); 20] = [
     ("Letter", "Letter"),
     ("Tabloid", "Tabloid"),
     ("Legal", "Legal"),
@@ -145,6 +145,7 @@ const PAPER_SIZES: [(&str, &str); 19] = [
     ("Envelope Monarch", "Envelope Monarch"),
     ("Envelope B5", "Envelope B5"),
     ("Envelope C5", "Envelope C5"),
+    ("Envelope DL", "Envelope DL"),
 ];
 
 /// Page Layout › Size as Excel lists it: a scrolling row per paper with a page drawn to its
