@@ -189,6 +189,12 @@ pub(super) fn size_gallery(app: &mut SheetApp, ui: &mut Ui) {
 pub(super) fn table_gallery(app: &mut SheetApp, ui: &mut Ui, cmd: &str) {
     ui.set_width(430.0);
     let Some(wb) = app.session.active().map(|d| d.wb.clone()) else { return };
+    // Format as Table outside a table asks for the data's range first; inside one it restyles it.
+    let asks = cmd == "home.formatAsTable"
+        && app.session.active().is_some_and(|d| {
+            let sel = d.selection.current();
+            d.wb.active().is_none_or(|sh| !sh.tables.iter().any(|t| t.range.contains_range(&sel)))
+        });
     for (fam, n) in [("Light", 21u32), ("Medium", 28), ("Dark", 11)] {
         ui.label(egui::RichText::new(fam).strong());
         egui::Grid::new(("tg", fam)).spacing(vec2(4.0, 4.0)).show(ui, |ui| {
@@ -200,7 +206,11 @@ pub(super) fn table_gallery(app: &mut SheetApp, ui: &mut Ui, cmd: &str) {
                     ui.painter().rect_stroke(r.expand(1.5), 2.0, Stroke::new(2.0, Tokens::get(ui.ctx()).cat(Cat::Orange)), StrokeKind::Outside);
                 }
                 if resp.on_hover_text(&name).clicked() {
-                    act(app, cmd, json!({"style": name}));
+                    if asks {
+                        app.open_dialog("createTable", json!({"style": name}));
+                    } else {
+                        act(app, cmd, json!({"style": name}));
+                    }
                     ui.close();
                 }
                 if i % 7 == 0 {
