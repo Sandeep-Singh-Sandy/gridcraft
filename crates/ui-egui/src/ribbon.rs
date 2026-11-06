@@ -22,6 +22,7 @@ mod home;
 mod insert;
 mod page_layout;
 mod review;
+mod shapes;
 mod shortcuts;
 mod title_bar;
 mod view;
