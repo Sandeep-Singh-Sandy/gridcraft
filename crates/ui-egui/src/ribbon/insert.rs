@@ -1,4 +1,5 @@
 use super::controls::{act, anchor_keytip, control_keytip, invoke, popup_command, sep};
+use super::shapes::shapes_gallery;
 use super::{
     Icon, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, big_button, big_split_button, icons, json, small_button, small_toggle_button, vec2,
 };
@@ -29,21 +30,7 @@ pub(super) fn insert(app: &mut SheetApp, ui: &mut Ui) {
     });
     let shapes = big_button(ui, Icon::Shapes, "Shapes", "Shapes", true);
     anchor_keytip(app, ui, &shapes, &["insert.shape"]);
-    egui::Popup::menu(&shapes).show(|ui| {
-        for (label, kind) in [
-            ("Rectangle", "rectangle"),
-            ("Rounded Rectangle", "roundedRectangle"),
-            ("Oval", "ellipse"),
-            ("Triangle", "triangle"),
-            ("Line", "line"),
-            ("Arrow", "arrow"),
-            ("Text Box", "textBox"),
-        ] {
-            if ui.button(label).clicked() {
-                act(app, "insert.shape", json!({"kind": kind}));
-            }
-        }
-    });
+    egui::Popup::menu(&shapes).show(|ui| shapes_gallery(app, ui));
     let icn = big_button(ui, Icon::Theme, "Icons", "Insert an icon", true);
     anchor_keytip(app, ui, &icn, &["insert.icons"]);
     egui::Popup::menu(&icn).show(|ui| {
