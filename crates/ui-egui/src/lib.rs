@@ -7,11 +7,13 @@
 #![forbid(unsafe_code)]
 
 /// GridCraft as craft-update knows it, with its 128 px icon and accent colour: the update
-/// prompt shows both, and an AppImage's menu entry gets the icon.
+/// prompt shows both, and an AppImage's menu entry gets the icon. Updates are looked up (and
+/// downloaded) only from the `repo` below, this fork's releases rather than upstream's.
 #[cfg(not(target_arch = "wasm32"))]
 pub const UPDATE_APP: craft_update::app::App = craft_update::app::App {
     icon_png: Some(include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/ai.storyteller.gridcraft.png")),
     accent: Some([0x1f, 0x9d, 0x55]),
+    repo: "Sandeep-Singh-Sandy/gridcraft",
     ..craft_update::suite::GRIDCRAFT
 };
 
