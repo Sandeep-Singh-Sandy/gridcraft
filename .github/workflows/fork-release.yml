@@ -42,6 +42,7 @@ jobs:
           "version=$v" >> $env:GITHUB_OUTPUT
           "build=$((-not $exists).ToString().ToLower())" >> $env:GITHUB_OUTPUT
           Write-Output "v$v already released: $exists"
+          $global:LASTEXITCODE = 0 # "release not found" is an answer, not a failure
 
       - name: Rust and WiX
         if: steps.ver.outputs.build == 'true'
